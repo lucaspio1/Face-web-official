@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Cadastro Facial</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #dee2e6;
+        }
+
+        .person-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .person-info.show {
+            display: block;
+        }
+
+        .person-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .person-info p {
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .photo-area {
+            border: 3px dashed #ddd;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            transition: border-color 0.3s ease;
+        }
+
+        .photo-area.dragover {
+            border-color: #667eea;
+            background: #f0f8ff;
+        }
+
+        .photo-preview {
+            max-width: 300px;
+            max-height: 300px;
+            border-radius: 10px;
+            margin: 20px auto;
+            display: none;
+        }
+
+        .photo-preview.show {
+            display: block;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #b3d7ff;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .steps-info {
+            background: #e3f2fd;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .steps-info h3 {
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+
+        .steps-info ol {
+            margin-left: 20px;
+        }
+
+        .steps-info li {
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-user-plus"></i> Cadastro Facial</h1>
+            <p>Sistema de registro por reconhecimento facial</p>
+        </div>
+
+        <!-- Instruções -->
+        <div class="steps-info">
+            <h3><i class="fas fa-list-ol"></i> Como funciona:</h3>
+            <ol>
+                <li>Digite seu CPF para buscar seus dados</li>
+                <li>Tire ou envie uma foto com seu rosto bem visível</li>
+                <li>Clique em "Cadastrar Face" para finalizar</li>
+            </ol>
+        </div>
+
+        <!-- Formulário de Cadastro -->
+        <form id="formCadastro">
+            <div class="form-group">
+                <label for="cpf">
+                    <i class="fas fa-id-card"></i> CPF
+                </label>
+                <input type="text" id="cpf" placeholder="Digite o CPF (apenas números)" maxlength="11">
+            </div>
+
+            <button type="button" id="btnBuscarCPF" class="btn">
+                <i class="fas fa-search"></i> Buscar Dados
+            </button>
+
+            <div id="personInfo" class="person-info">
+                <h3><i class="fas fa-user"></i> Dados Encontrados</h3>
+                <p><strong>Nome:</strong> <span id="personNome"></span></p>
+                <p><strong>CPF:</strong> <span id="personCPF"></span></p>
+                <p><strong>Email:</strong> <span id="personEmail"></span></p>
+                <p><strong>Telefone:</strong> <span id="personTelefone"></span></p>
+                <p><strong>Endereço:</strong> <span id="personEndereco"></span></p>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <i class="fas fa-camera"></i> Foto para Reconhecimento
+                </label>
+                <div class="photo-area" id="photoArea">
+                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ddd; margin-bottom: 20px;"></i>
+                    <p>Clique aqui ou arraste uma foto</p>
+                    <p style="font-size: 0.9rem; color: #999;">Formatos: JPEG, PNG (máx. 5MB)</p>
+                    <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">
+                        <i class="fas fa-lightbulb"></i> 
+                        Dica: Use boa iluminação e posição frontal para melhor resultado
+                    </p>
+                </div>
+                <input type="file" id="fotoInput" class="file-input" accept="image/*">
+                <img id="photoPreview" class="photo-preview">
+            </div>
+
+            <button type="submit" id="btnCadastrar" class="btn" disabled>
+                <i class="fas fa-save"></i> Cadastrar Face
+            </button>
+
+            <button type="button" id="btnReset" class="btn btn-reset" style="display: none;">
+                <i class="fas fa-redo"></i> Novo Cadastro
+            </button>
+        </form>
+
+        <!-- Mensagem de Sucesso -->
+        <div id="successMessage" class="success-message">
+            <h3><i class="fas fa-check-circle"></i> Cadastro Realizado com Sucesso!</h3>
+            <p id="successText"></p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Processando...</p>
+        </div>
+
+        <!-- Alerts -->
+        <div id="alert" class="alert"></div>
+    </div>
+
+    <script>
+        // Variáveis globais
+        let dadosPessoa = null;
+        let fotoSelecionada = null;
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            formatCPFInput();
+        });
+
+        // Setup de event listeners
+        function setupEventListeners() {
+            // CPF input
+            document.getElementById('cpf').addEventListener('input', handleCPFInput);
+            document.getElementById('btnBuscarCPF').addEventListener('click', buscarCPF);
+
+            // Photo area
+            setupPhotoArea();
+
+            // Form
+            document.getElementById('formCadastro').addEventListener('submit', handleCadastro);
+            
+            // Reset button
+            document.getElementById('btnReset').addEventListener('click', resetForm);
+        }
+
+        // Formatação do CPF
+        function formatCPFInput() {
+            const cpfInput = document.getElementById('cpf');
+            cpfInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length > 11) value = value.slice(0, 11);
+                e.target.value = value;
+            });
+        }
+
+        // Handle CPF input
+        function handleCPFInput() {
+            const cpf = document.getElementById('cpf').value;
+            const btnBuscar = document.getElementById('btnBuscarCPF');
+            
+            if (cpf.length === 11) {
+                btnBuscar.disabled = false;
+            } else {
+                btnBuscar.disabled = true;
+                hidePersonInfo();
+            }
+        }
+
+        // Setup photo area
+        function setupPhotoArea() {
+            const area = document.getElementById('photoArea');
+            const input = document.getElementById('fotoInput');
+            const preview = document.getElementById('photoPreview');
+
+            area.addEventListener('click', () => input.click());
+            input.addEventListener('change', handlePhotoSelect);
+
+            // Drag and drop
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.classList.add('dragover');
+            });
+
+            area.addEventListener('dragleave', () => {
+                area.classList.remove('dragover');
+            });
+
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.classList.remove('dragover');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    input.files = files;
+                    handlePhotoSelect();
+                }
+            });
+        }
+
+        // Handle photo selection
+        function handlePhotoSelect() {
+            const input = document.getElementById('fotoInput');
+            const preview = document.getElementById('photoPreview');
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    showAlert('Arquivo muito grande. Máximo 5MB.', 'error');
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.add('show');
+                    fotoSelecionada = file;
+                    updateCadastroButton();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Buscar CPF
+        async function buscarCPF() {
+            const cpf = document.getElementById('cpf').value;
+            
+            if (cpf.length !== 11) {
+                showAlert('CPF deve ter 11 dígitos', 'error');
+                return;
+            }
+
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/api/buscar-cpf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ cpf })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    dadosPessoa = result.dados;
+                    showPersonInfo(result.dados);
+                    updateCadastroButton();
+                    showAlert('Dados encontrados com sucesso!', 'success');
+                } else {
+                    hidePersonInfo();
+                    showAlert(result.message, 'error');
+                }
+
+            } catch (error) {
+                console.error('Erro ao buscar CPF:', error);
+                showAlert('Erro ao conectar com o servidor', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Show person info
+        function showPersonInfo(dados) {
+            document.getElementById('personNome').textContent = dados.nome;
+            document.getElementById('personCPF').textContent = dados.cpf;
+            document.getElementById('personEmail').textContent = dados.email;
+            document.getElementById('personTelefone').textContent = dados.telefone;
+            document.getElementById('personEndereco').textContent = dados.endereco;
+            document.getElementById('personInfo').classList.add('show');
+        }
+
+        // Hide person info
+        function hidePersonInfo() {
+            document.getElementById('personInfo').classList.remove('show');
+            dadosPessoa = null;
+            updateCadastroButton();
+        }
+
+        // Update cadastro button
+        function updateCadastroButton() {
+            const btnCadastrar = document.getElementById('btnCadastrar');
+            btnCadastrar.disabled = !(dadosPessoa && fotoSelecionada);
+        }
+
+        // Handle cadastro
+        async function handleCadastro(e) {
+            e.preventDefault();
+
+            if (!dadosPessoa || !fotoSelecionada) {
+                showAlert('Busque os dados do CPF e selecione uma foto', 'error');
+                return;
+            }
+
+            showLoading(true);
+            
+            const formData = new FormData();
+            formData.append('cpf', dadosPessoa.cpf);
+            formData.append('nome', dadosPessoa.nome);
+            formData.append('foto', fotoSelecionada);
+
+            try {
+                const response = await fetch('/api/cadastrar-face', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess(result.message);
+                    hideForm();
+                } else {
+                    showAlert(result.message, 'error');
+                }
+
+            } catch (error) {
+                console.error('Erro ao cadastrar:', error);
+                showAlert('Erro ao conectar com o servidor', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Show success
+        function showSuccess(message) {
+            document.getElementById('successText').textContent = message;
+            document.getElementById('successMessage').classList.add('show');
+            document.getElementById('btnReset').style.display = 'block';
+        }
+
+        // Hide form
+        function hideForm() {
+            document.getElementById('formCadastro').style.display = 'none';
+        }
+
+        // Show form
+        function showForm() {
+            document.getElementById('formCadastro').style.display = 'block';
+        }
+
+        // Reset form
+        function resetForm() {
+            // Reset form fields
+            document.getElementById('cpf').value = '';
+            document.getElementById('fotoInput').value = '';
+            document.getElementById('photoPreview').classList.remove('show');
+            
+            // Reset variables
+            dadosPessoa = null;
+            fotoSelecionada = null;
+            
+            // Reset UI
+            hidePersonInfo();
+            hideSuccess();
+            showForm();
+            updateCadastroButton();
+            hideAlert();
+            
+            document.getElementById('btnReset').style.display = 'none';
+            document.getElementById('btnBuscarCPF').disabled = true;
+        }
+
+        // Hide success
+        function hideSuccess() {
+            document.getElementById('successMessage').classList.remove('show');
+        }
+
+        // Show loading
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.classList.add('show');
+            } else {
+                loading.classList.remove('show');
+            }
+        }
+
+        // Show alert
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert alert-${type} show`;
+            alert.textContent = message;
+            
+            setTimeout(() => {
+                hideAlert();
+            }, 5000);
+        }
+
+        // Hide alert
+        function hideAlert() {
+            document.getElementById('alert').classList.remove('show');
+        }
+    </script>
+</body>
+</html>
