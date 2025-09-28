@@ -17,7 +17,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ConfiguraÃ§Ã£o do multer para upload de imagens
+// Configuração do multer para upload de imagens
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
@@ -29,37 +29,37 @@ const upload = multer({
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Tipo de arquivo nÃ£o permitido. Use JPEG ou PNG.'));
+      cb(new Error('Tipo de arquivo não permitido. Use JPEG ou PNG.'));
     }
   }
 });
 
-// InicializaÃ§Ã£o dos serviÃ§os
+// Inicialização dos serviços
 let faceService;
 let dbService;
 
 async function initializeServices() {
   try {
-    console.log('ðŸš€ Inicializando Sistema de Cadastro Facial...\n');
+    console.log('🚀 Inicializando Sistema de Cadastro Facial...\n');
     
     dbService = new GoogleSheetsService();
     await dbService.initialize();
-    console.log('âœ“ Google Sheets inicializado');
+    console.log('✅ Google Sheets inicializado');
     
     faceService = new FaceRecognitionService();
     await faceService.initialize();
-    console.log('âœ“ ServiÃ§o de reconhecimento facial inicializado');
+    console.log('✅ Serviço de reconhecimento facial inicializado');
     
-    console.log('\nâœ… Todos os serviÃ§os foram inicializados com sucesso!');
+    console.log('\n✨ Todos os serviços foram inicializados com sucesso!');
   } catch (error) {
-    console.error('âŒ Erro ao inicializar serviÃ§os:', error);
+    console.error('❌ Erro ao inicializar serviços:', error);
     process.exit(1);
   }
 }
 
 // Rotas
 
-// PÃ¡gina principal
+// Página principal
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -72,17 +72,17 @@ app.post('/api/buscar-cpf', async (req, res) => {
     if (!cpf || cpf.length !== 11) {
       return res.status(400).json({
         success: false,
-        message: 'CPF deve ter 11 dÃ­gitos'
+        message: 'CPF deve ter 11 dígitos'
       });
     }
     
-    console.log(`ðŸ“‹ Buscando dados para CPF: ${cpf}`);
+    console.log(`🔍 Buscando dados para CPF: ${cpf}`);
     
-    // 1. Primeiro verificar se jÃ¡ existe no Google Sheets
+    // 1. Primeiro verificar se já existe no Google Sheets
     const pessoaCadastrada = await dbService.getPersonByCPF(cpf);
     
     if (pessoaCadastrada) {
-      console.log(`âœ“ CPF ${cpf} encontrado no sistema: ${pessoaCadastrada.nome}`);
+      console.log(`✅ CPF ${cpf} encontrado no sistema: ${pessoaCadastrada.nome}`);
       
       return res.json({
         success: true,
@@ -90,42 +90,42 @@ app.post('/api/buscar-cpf', async (req, res) => {
           nome: pessoaCadastrada.nome,
           cpf: pessoaCadastrada.cpf,
           email: pessoaCadastrada.email || '',
-          telefone: '', // NÃ£o temos no Google Sheets
-          endereco: '', // NÃ£o temos no Google Sheets
+          telefone: '', // Não temos no Google Sheets
+          endereco: '', // Não temos no Google Sheets
           data_cadastro: pessoaCadastrada.data_cadastro,
           origem: 'sistema', // Indica que veio do nosso sistema
-          ja_tem_face: true // Indica que jÃ¡ tem face cadastrada
+          ja_tem_face: true // Indica que já tem face cadastrada
         },
         message: 'Pessoa encontrada no sistema'
       });
     }
     
-    // 2. Se nÃ£o existe, buscar na simulaÃ§Ã£o (dados externos)
-    console.log(`â„¹ï¸ CPF ${cpf} nÃ£o encontrado no sistema, buscando dados externos...`);
+    // 2. Se não existe, buscar na simulação (dados externos)
+    console.log(`⏳ CPF ${cpf} não encontrado no sistema, buscando dados externos...`);
     
     const dadosSimulados = await simularBuscaCPF(cpf);
     
     if (!dadosSimulados) {
       return res.status(404).json({
         success: false,
-        message: 'CPF nÃ£o encontrado'
+        message: 'CPF não encontrado'
       });
     }
     
-    console.log(`âœ“ Dados externos encontrados para: ${dadosSimulados.nome}`);
+    console.log(`✅ Dados externos encontrados para: ${dadosSimulados.nome}`);
     
     res.json({
       success: true,
       dados: {
         ...dadosSimulados,
         origem: 'externo', // Indica que veio de fonte externa
-        ja_tem_face: false // Indica que ainda nÃ£o tem face
+        ja_tem_face: false // Indica que ainda não tem face
       },
       message: 'Dados encontrados'
     });
     
   } catch (error) {
-    console.error('âŒ Erro ao buscar CPF:', error);
+    console.error('❌ Erro ao buscar CPF:', error);
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor'
@@ -133,7 +133,7 @@ app.post('/api/buscar-cpf', async (req, res) => {
   }
 });
 
-// Cadastrar face - SEMPRE permite, atualiza se jÃ¡ existe
+// Cadastrar face - SEMPRE permite, atualiza se já existe
 app.post('/api/cadastrar-face', upload.single('foto'), async (req, res) => {
   try {
     const { cpf, nome } = req.body;
@@ -142,41 +142,41 @@ app.post('/api/cadastrar-face', upload.single('foto'), async (req, res) => {
     if (!cpf || !nome || !foto) {
       return res.status(400).json({
         success: false,
-        message: 'CPF, nome e foto sÃ£o obrigatÃ³rios'
+        message: 'CPF, nome e foto são obrigatórios'
       });
     }
     
-    console.log(`\nðŸ“¸ Processando cadastro/atualizaÃ§Ã£o para: ${nome} (CPF: ${cpf})`);
-    console.log(`ðŸ“ Tamanho da foto: ${(foto.size / 1024).toFixed(1)} KB`);
+    console.log(`\n📸 Processando cadastro/atualização para: ${nome} (CPF: ${cpf})`);
+    console.log(`📊 Tamanho da foto: ${(foto.size / 1024).toFixed(1)} KB`);
     
-    // Verificar se jÃ¡ existe (para logs, mas NÃƒO bloquear)
+    // Verificar se já existe (para logs, mas NÃO bloquear)
     const existePessoa = await dbService.getPersonByCPF(cpf);
     
     if (existePessoa) {
-      console.log(`â„¹ï¸ Pessoa jÃ¡ existe: ${existePessoa.nome} - ATUALIZANDO face...`);
+      console.log(`⏳ Pessoa já existe: ${existePessoa.nome} - ATUALIZANDO face...`);
     } else {
-      console.log(`â„¹ï¸ Nova pessoa - CADASTRANDO...`);
+      console.log(`⏳ Nova pessoa - CADASTRANDO...`);
     }
     
     // Extrair embedding da face
-    console.log('ðŸ” Analisando face na imagem...');
+    console.log('🤖 Analisando face na imagem...');
     const embedding = await faceService.extractFaceEmbedding(foto.buffer);
     
     if (!embedding) {
       return res.status(400).json({
         success: false,
-        message: 'NÃ£o foi possÃ­vel detectar uma face na imagem. Tente com melhor iluminaÃ§Ã£o e posiÃ§Ã£o frontal.'
+        message: 'Não foi possível detectar uma face na imagem. Tente com melhor iluminação e posição frontal.'
       });
     }
     
-    console.log(`âœ“ Face processada com sucesso! Embedding de ${embedding.length} dimensÃµes`);
+    console.log(`✅ Face processada com sucesso! Embedding de ${embedding.length} dimensões`);
     
-    // Salvar no Google Sheets (sempre adiciona nova linha - histÃ³rico)
-    console.log('ðŸ’¾ Salvando dados no Google Sheets...');
+    // Salvar no Google Sheets (sempre adiciona nova linha - histórico)
+    console.log('💾 Salvando dados no Google Sheets...');
     const personId = await dbService.addPerson(cpf, nome, embedding, foto.buffer);
     
     const acao = existePessoa ? 'atualizada' : 'cadastrada';
-    console.log(`ðŸŽ‰ Face de ${nome} ${acao} com sucesso! ID: ${personId}\n`);
+    console.log(`🎉 Face de ${nome} ${acao} com sucesso! ID: ${personId}\n`);
     
     res.json({
       success: true,
@@ -186,14 +186,15 @@ app.post('/api/cadastrar-face', upload.single('foto'), async (req, res) => {
     });
     
   } catch (error) {
-    console.error('âŒ Erro ao cadastrar face:', error);
+    console.error('❌ Erro ao cadastrar face:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao processar cadastro: ' + error.message
     });
   }
 });
-// FunÃ§Ã£o para obter IP local
+
+// Função para obter IP local
 function getLocalIP() {
   const { networkInterfaces } = require('os');
   const nets = networkInterfaces();
@@ -211,13 +212,13 @@ function getLocalIP() {
 
 // Tratamento de erros
 app.use((error, req, res, next) => {
-  console.error('âŒ Erro no servidor:', error);
+  console.error('❌ Erro no servidor:', error);
   
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'Arquivo muito grande. MÃ¡ximo 5MB.'
+        message: 'Arquivo muito grande. Máximo 5MB.'
       });
     }
   }
@@ -250,18 +251,17 @@ async function startServer() {
   });
 }
 
-
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('\nðŸ›‘ Parando servidor...');
+  console.log('\n🛑 Parando servidor...');
   if (dbService) {
     dbService.close();
   }
-  console.log('âœ… Servidor finalizado com sucesso!');
+  console.log('✨ Servidor finalizado com sucesso!');
   process.exit(0);
 });
 
 startServer().catch((error) => {
-  console.error('âŒ Erro crÃ­tico ao iniciar servidor:', error);
+  console.error('❌ Erro crítico ao iniciar servidor:', error);
   process.exit(1);
 });
