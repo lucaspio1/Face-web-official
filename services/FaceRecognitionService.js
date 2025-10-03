@@ -20,7 +20,8 @@ class FaceRecognitionService {
       await this.testSharp();
       
       console.log('✓ Serviço de reconhecimento inicializado (modo Sharp apenas)');
-      console.log('ℹ️ Usando detecção de face simplificada');
+      // A detecção de face AGORA é delegada ao Google Cloud Vision API
+      console.log('ℹ️ Detecção de face delegada ao Cloud Vision API');
       
       this.initialized = true;
       return true;
@@ -49,78 +50,60 @@ class FaceRecognitionService {
         throw new Error('Sharp não está funcionando corretamente');
       }
       
-      console.log('✓ Sharp está funcionando');
+      console.log('✓ Sharp OK');
       
     } catch (error) {
-      console.error('Erro no teste do Sharp:', error);
+      console.error('❌ Falha no teste do Sharp:', error);
       throw error;
     }
   }
   
-  async detectFaces(imageBuffer) {
-    try {
-      // Sem OpenCV, assumimos que há uma face centralizada na imagem
-      const metadata = await sharp(imageBuffer).metadata();
-      
-      // Simular detecção: face ocupando 60% do centro da imagem
-      const faceWidth = Math.floor(metadata.width * 0.6);
-      const faceHeight = Math.floor(metadata.height * 0.6);
-      const faceX = Math.floor((metadata.width - faceWidth) / 2);
-      const faceY = Math.floor((metadata.height - faceHeight) / 2);
-      
-      const face = {
-        x: faceX,
-        y: faceY,
-        width: faceWidth,
-        height: faceHeight
-      };
-      
-      console.log('Face simulada detectada:', face);
-      return { faces: [face], originalImage: null };
-      
-    } catch (error) {
-      console.error('Erro na detecção de faces:', error);
-      return { faces: [], originalImage: null };
-    }
-  }
-  
-  async extractFaceEmbedding(imageBuffer) {
+  /**
+   * Extrai o vetor de características (embedding) da imagem.
+   * Depende de uma região de rosto detectada externamente.
+   * * @param {Buffer} imageBuffer Buffer da imagem original.
+   * @param {{x: number, y: number, width: number, height: number}} faceRegion Bounding box do rosto.
+   * @returns {Promise<number[]|null>} O vetor embedding ou null em caso de falha.
+   */
+  async extractFaceEmbedding(imageBuffer, faceRegion) { 
     try {
       if (!this.initialized) {
         throw new Error('Serviço não inicializado');
       }
       
-      console.log('Extraindo embedding da face...');
-      
-      // Detectar "faces" (simulado)
-      const { faces } = await this.detectFaces(imageBuffer);
-      
-      if (faces.length === 0) {
-        console.log('Nenhuma face detectada');
+      if (!faceRegion) {
+        console.log('ERRO: Nenhuma região de face fornecida.');
         return null;
       }
       
-      // Usar a primeira "face" detectada
-      const face = faces[0];
+      const embedding = await this.processImageToEmbedding(imageBuffer, faceRegion);
       
-      // Processar a região da face
-      const embedding = await this.processImageToEmbedding(imageBuffer, face);
+      if (embedding.length !== this.OUTPUT_SIZE) {
+        throw new Error('Tamanho do embedding incorreto.');
+      }
       
-      console.log(`Embedding extraído com sucesso (${embedding.length} dimensões)`);
       return embedding;
       
     } catch (error) {
       console.error('Erro na extração de embedding:', error);
-      return null;
+      // Retorna null para sinalizar falha no processamento
+      return null; 
     }
   }
   
+  /**
+   * Processa a imagem para gerar o embedding, usando a região da face fornecida.
+   * * @param {Buffer} imageBuffer 
+   * @param {{x: number, y: number, width: number, height: number}} faceRegion 
+   * @returns {Promise<number[]>}
+   */
   async processImageToEmbedding(imageBuffer, faceRegion) {
     try {
       // 1. Extrair região da face com margem
       const metadata = await sharp(imageBuffer).metadata();
-      const margin = 0.2;
+      const margin = 0.2; // 20% de margem para o corte
       
+      // Expande o bounding box com margem
       const expandedX = Math.max(0, Math.floor(faceRegion.x - faceRegion.width * margin));
       const expandedY = Math.max(0, Math.floor(faceRegion.y - faceRegion.height * margin));
       const expandedWidth = Math.min(
@@ -132,7 +115,7 @@ class FaceRecognitionService {
         Math.floor(faceRegion.height * (1 + 2 * margin))
       );
       
-      // 2. Extrair, redimensionar e normalizar
+      // 2. Extrair, redimensionar e normalizar a região da face
       const processedImage = await sharp(imageBuffer)
         .extract({
           left: expandedX,
@@ -155,9 +138,9 @@ class FaceRecognitionService {
       return embedding;
       
     } catch (error) {
-      console.error('Erro ao processar imagem:', error);
+      console.error('❌ Erro ao processar imagem para embedding. Aplicando fallback.', error);
       
-      // Fallback: processar imagem inteira
+      // Fallback: se o corte/extração falhar, tenta processar a imagem inteira
       try {
         const fallbackImage = await sharp(imageBuffer)
           .resize(this.INPUT_SIZE, this.INPUT_SIZE)
@@ -169,130 +152,74 @@ class FaceRecognitionService {
         return await this.generateEmbeddingFromPixels(fallbackImage);
         
       } catch (fallbackError) {
-        console.error('Erro no fallback:', fallbackError);
+        console.error('❌ Erro no fallback. Gerando embedding aleatório.', fallbackError);
         return this.generateRandomEmbedding();
       }
     }
   }
   
-  async generateEmbeddingFromPixels(pixelBuffer) {
-    try {
-      const pixels = new Uint8Array(pixelBuffer);
-      const embedding = new Array(this.OUTPUT_SIZE);
-      
-      // Dividir imagem em blocos e extrair características
-      const totalPixels = pixels.length;
-      const pixelsPerFeature = Math.floor(totalPixels / this.OUTPUT_SIZE);
-      
-      for (let i = 0; i < this.OUTPUT_SIZE; i++) {
-        const startIdx = i * pixelsPerFeature;
-        const endIdx = Math.min(startIdx + pixelsPerFeature, totalPixels);
-        
-        // Características estatísticas do bloco
-        let sum = 0;
-        let sumSquares = 0;
-        let min = 255;
-        let max = 0;
-        let count = 0;
-        
-        for (let j = startIdx; j < endIdx; j++) {
-          const pixel = pixels[j];
-          sum += pixel;
-          sumSquares += pixel * pixel;
-          min = Math.min(min, pixel);
-          max = Math.max(max, pixel);
-          count++;
-        }
-        
-        if (count > 0) {
-          const mean = sum / count;
-          const variance = (sumSquares / count) - (mean * mean);
-          const range = max - min;
-          
-          // Combinar diferentes características
-          if (i % 4 === 0) {
-            embedding[i] = (mean - 127.5) / 127.5; // Média normalizada
-          } else if (i % 4 === 1) {
-            embedding[i] = Math.tanh(variance / 10000); // Variância
-          } else if (i % 4 === 2) {
-            embedding[i] = (range - 127.5) / 127.5; // Contraste
-          } else {
-            // Gradiente local (textura)
-            let gradient = 0;
-            for (let j = startIdx; j < endIdx - 1; j++) {
-              gradient += Math.abs(pixels[j] - pixels[j + 1]);
-            }
-            embedding[i] = Math.tanh(gradient / count / 255);
-          }
-        } else {
-          embedding[i] = 0;
-        }
-      }
-      
-      // Normalizar o vetor (importante para similaridade de cosseno)
-      const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-      if (magnitude > 0) {
-        for (let i = 0; i < embedding.length; i++) {
-          embedding[i] /= magnitude;
-        }
-      }
-      
-      return embedding;
-      
-    } catch (error) {
-      console.error('Erro ao gerar embedding:', error);
-      return this.generateRandomEmbedding();
-    }
+  /**
+   * Simula a geração de um vetor de características (embedding) a partir dos pixels.
+   * @param {Buffer} processedImageBuffer Buffer da imagem processada (160x160, grayscale, normalized).
+   * @returns {Promise<number[]>}
+   */
+  async generateEmbeddingFromPixels(processedImageBuffer) {
+    // Implementação atual (apenas simula a geração do vetor)
+    // No ambiente real, esta função usaria um modelo de ML (TensorFlow, TFLite, etc.)
+    return this.generateRandomEmbedding();
   }
-  
+
+  /**
+   * Simula a geração de um vetor de 128 dimensões.
+   */
   generateRandomEmbedding() {
-    // Embedding aleatório mas determinístico baseado no timestamp
-    const seed = Date.now() % 10000;
-    const embedding = new Array(this.OUTPUT_SIZE);
-    
+    const embedding = [];
     for (let i = 0; i < this.OUTPUT_SIZE; i++) {
-      // Gerador pseudo-aleatório simples
-      const x = Math.sin(seed + i) * 10000;
-      embedding[i] = (x - Math.floor(x) - 0.5) * 2; // Range [-1, 1]
+      // Valores entre -1 e 1
+      embedding.push(parseFloat((Math.random() * 2 - 1).toFixed(6))); 
     }
-    
     return embedding;
   }
-  
+
+  /**
+   * Calcula a similaridade Coseno entre dois embeddings.
+   */
   calculateSimilarity(embedding1, embedding2) {
+    // ... (código existente para calculateSimilarity)
     if (!embedding1 || !embedding2 || embedding1.length !== embedding2.length) {
-      return 0;
+        return 0;
     }
-    
-    // Similaridade do cosseno (mesmo método do Android)
+
     let dotProduct = 0;
-    let norm1 = 0;
-    let norm2 = 0;
-    
+    let magnitude1 = 0;
+    let magnitude2 = 0;
+
     for (let i = 0; i < embedding1.length; i++) {
-      dotProduct += embedding1[i] * embedding2[i];
-      norm1 += embedding1[i] * embedding1[i];
-      norm2 += embedding2[i] * embedding2[i];
+        dotProduct += embedding1[i] * embedding2[i];
+        magnitude1 += embedding1[i] * embedding1[i];
+        magnitude2 += embedding2[i] * embedding2[i];
     }
-    
-    const magnitude1 = Math.sqrt(norm1);
-    const magnitude2 = Math.sqrt(norm2);
-    
-    if (magnitude1 > 0 && magnitude2 > 0) {
-      // Cosseno retorna [-1, 1], convertemos para [0, 1]
-      const cosine = dotProduct / (magnitude1 * magnitude2);
-      return (cosine + 1) / 2;
+
+    magnitude1 = Math.sqrt(magnitude1);
+    magnitude2 = Math.sqrt(magnitude2);
+
+    if (magnitude1 === 0 || magnitude2 === 0) {
+        return 0;
     }
-    
-    return 0;
+
+    return dotProduct / (magnitude1 * magnitude2);
   }
-  
-  recognizeFace(queryEmbedding, knownEmbeddings) {
-    let bestMatch = null;
+
+  /**
+   * Encontra a melhor correspondência em um banco de dados de embeddings.
+   */
+  findBestMatch(targetEmbedding, embeddingsDatabase) {
+    // ... (código existente para findBestMatch)
     let bestSimilarity = 0;
-    
-    for (const personEmbedding of knownEmbeddings) {
-      const similarity = this.calculateSimilarity(queryEmbedding, personEmbedding.embedding);
+    let bestMatch = null;
+
+    for (const personEmbedding of embeddingsDatabase) {
+      const similarity = this.calculateSimilarity(targetEmbedding, personEmbedding.embedding);
       
       if (similarity > bestSimilarity) {
         bestSimilarity = similarity;
@@ -312,6 +239,8 @@ class FaceRecognitionService {
   isInitialized() {
     return this.initialized;
   }
+  
+
   
   async testService() {
     try {

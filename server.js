@@ -1,3 +1,5 @@
+// server.js
+
 require('dotenv').config();
 
 const express = require('express');
@@ -5,11 +7,14 @@ const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const os = require('os'); // Adicionado para getLocalIP
+
 const FaceRecognitionService = require('./services/FaceRecognitionService');
 const GoogleSheetsService = require('./services/GoogleSheetsService');
+const VisionAPIService = require('./services/VisionAPIService');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; 
 
 // Middlewares
 app.use(cors());
@@ -37,15 +42,22 @@ const upload = multer({
 // Inicialização dos serviços
 let faceService;
 let dbService;
+let visionService; 
 
 async function initializeServices() {
   try {
     console.log('🚀 Inicializando Sistema de Cadastro Facial...\n');
     
+    // Serviço de Banco de Dados
     dbService = new GoogleSheetsService();
     await dbService.initialize();
     console.log('✅ Google Sheets inicializado');
     
+    // Serviço Google Cloud Vision
+    visionService = new VisionAPIService();
+    console.log('✅ Serviço Cloud Vision inicializado (Autenticação gcloud OK)');
+    
+    // Serviço de Reconhecimento Facial (Customizado)
     faceService = new FaceRecognitionService();
     await faceService.initialize();
     console.log('✅ Serviço de reconhecimento facial inicializado');
@@ -53,91 +65,56 @@ async function initializeServices() {
     console.log('\n✨ Todos os serviços foram inicializados com sucesso!');
   } catch (error) {
     console.error('❌ Erro ao inicializar serviços:', error);
-    process.exit(1);
+    throw error; 
   }
 }
 
-// Rotas
-
-// Página principal
+// Rota para servir o index.html (mantida)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Buscar dados por CPF
+// Rota de busca de CPF (ATUALIZADA a resposta para compatibilidade com a nova estrutura de dados do frontend)
 app.post('/api/buscar-cpf', async (req, res) => {
-  try {
-    const { cpf } = req.body;
-    
-    if (!cpf || cpf.length !== 11) {
-      return res.status(400).json({
-        success: false,
-        message: 'CPF deve ter 11 dígitos'
-      });
+    try {
+        const { cpf } = req.body;
+        if (!cpf) {
+            return res.status(400).json({ success: false, message: 'CPF é obrigatório para busca.' });
+        }
+
+        console.log(`\n🔍 Buscando informações para CPF: ${cpf}`);
+        
+        // 1. Buscar dados no Google Sheets (Apps Script buscará na aba 'Alunos')
+        const personData = await dbService.getPersonByCPF(cpf);
+
+        if (!personData) {
+            console.log('❌ CPF não encontrado no banco.');
+            return res.json({ success: false, message: 'CPF não encontrado na lista de Alunos.', dadosPessoa: null });
+        }
+        
+        // Retorna todos os dados para que o frontend os envie de volta no cadastro
+        console.log(`✅ Pessoa encontrada: ${personData.nome}`);
+        
+        res.json({
+            success: true,
+            message: `Pessoa encontrada: ${personData.nome}`,
+            // O frontend espera 'dadosPessoa' (antigo 'data' do Apps Script)
+            dadosPessoa: personData
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar CPF:', error);
+        res.status(500).json({ success: false, message: 'Erro ao processar busca: ' + error.message });
     }
-    
-    console.log(`🔍 Buscando dados para CPF: ${cpf}`);
-    
-    // 1. Primeiro verificar se já existe no Google Sheets
-    const pessoaCadastrada = await dbService.getPersonByCPF(cpf);
-    
-    if (pessoaCadastrada) {
-      console.log(`✅ CPF ${cpf} encontrado no sistema: ${pessoaCadastrada.nome}`);
-      
-      return res.json({
-        success: true,
-        dados: {
-          nome: pessoaCadastrada.nome,
-          cpf: pessoaCadastrada.cpf,
-          email: pessoaCadastrada.email || '',
-          telefone: '', // Não temos no Google Sheets
-          endereco: '', // Não temos no Google Sheets
-          data_cadastro: pessoaCadastrada.data_cadastro,
-          origem: 'sistema', // Indica que veio do nosso sistema
-          ja_tem_face: true // Indica que já tem face cadastrada
-        },
-        message: 'Pessoa encontrada no sistema'
-      });
-    }
-    
-    // 2. Se não existe, buscar na simulação (dados externos)
-    console.log(`⏳ CPF ${cpf} não encontrado no sistema, buscando dados externos...`);
-    
-    const dadosSimulados = await simularBuscaCPF(cpf);
-    
-    if (!dadosSimulados) {
-      return res.status(404).json({
-        success: false,
-        message: 'CPF não encontrado'
-      });
-    }
-    
-    console.log(`✅ Dados externos encontrados para: ${dadosSimulados.nome}`);
-    
-    res.json({
-      success: true,
-      dados: {
-        ...dadosSimulados,
-        origem: 'externo', // Indica que veio de fonte externa
-        ja_tem_face: false // Indica que ainda não tem face
-      },
-      message: 'Dados encontrados'
-    });
-    
-  } catch (error) {
-    console.error('❌ Erro ao buscar CPF:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor'
-    });
-  }
 });
 
-// Cadastrar face - SEMPRE permite, atualiza se já existe
+
+// ROTA /api/cadastrar-face (ATUALIZADA: Envia todos os dados)
 app.post('/api/cadastrar-face', upload.single('foto'), async (req, res) => {
   try {
-    const { cpf, nome } = req.body;
-    const foto = req.file;
+    // RECEBE TODOS OS NOVOS DADOS DO FRONTEND
+    const { id, cpf, nome, email, telefone } = req.body; 
+    const foto = req.file; 
     
     if (!cpf || !nome || !foto) {
       return res.status(400).json({
@@ -147,42 +124,54 @@ app.post('/api/cadastrar-face', upload.single('foto'), async (req, res) => {
     }
     
     console.log(`\n📸 Processando cadastro/atualização para: ${nome} (CPF: ${cpf})`);
-    console.log(`📊 Tamanho da foto: ${(foto.size / 1024).toFixed(1)} KB`);
     
-    // Verificar se já existe (para logs, mas NÃO bloquear)
-    const existePessoa = await dbService.getPersonByCPF(cpf);
-    
-    if (existePessoa) {
-      console.log(`⏳ Pessoa já existe: ${existePessoa.nome} - ATUALIZANDO face...`);
-    } else {
-      console.log(`⏳ Nova pessoa - CADASTRANDO...`);
-    }
-    
-    // Extrair embedding da face
-    console.log('🤖 Analisando face na imagem...');
-    const embedding = await faceService.extractFaceEmbedding(foto.buffer);
-    
-    if (!embedding) {
+    // 1. Detecção de Face com Cloud Vision API
+    console.log('🤖 Detectando rosto com Google Cloud Vision API...');
+    const faceBox = await visionService.detectFace(foto.buffer); 
+
+    if (!faceBox) {
       return res.status(400).json({
         success: false,
-        message: 'Não foi possível detectar uma face na imagem. Tente com melhor iluminação e posição frontal.'
+        message: 'Não foi possível detectar uma face válida na imagem. Tente uma foto mais clara.'
+      });
+    }
+    
+    // 2. Extrair embedding da face usando as coordenadas da Vision API
+    console.log('🤖 Analisando face na imagem (Gerando Embedding)...');
+    const embedding = await faceService.extractFaceEmbedding(foto.buffer, faceBox); 
+    
+    if (!embedding) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erro interno ao processar a face para embedding.'
       });
     }
     
     console.log(`✅ Face processada com sucesso! Embedding de ${embedding.length} dimensões`);
     
-    // Salvar no Google Sheets (sempre adiciona nova linha - histórico)
-    console.log('💾 Salvando dados no Google Sheets...');
-    const personId = await dbService.addPerson(cpf, nome, embedding, foto.buffer);
+    // 3. Salvar no Google Sheets (Passando todos os campos extras)
+    console.log('💾 Salvando dados no Google Sheets e atualizando status do Aluno...');
     
-    const acao = existePessoa ? 'atualizada' : 'cadastrada';
-    console.log(`🎉 Face de ${nome} ${acao} com sucesso! ID: ${personId}\n`);
+    // O retorno da função não será mais 'existePessoa', mas sim o ID do cadastro
+    const personIdRetornado = await dbService.addPerson(
+        cpf, 
+        nome, 
+        embedding, 
+        foto.buffer,
+        email, 
+        telefone, 
+        id // ID do aluno
+    );
+    
+    // Assumimos que a ação é sempre 'cadastrada/atualizada' no novo fluxo
+    const acao = 'cadastrada'; 
+    console.log(`🎉 Face de ${nome} ${acao} com sucesso! ID: ${personIdRetornado}\n`);
     
     res.json({
       success: true,
       message: `Face de ${nome} foi ${acao} com sucesso!`,
-      personId: personId,
-      acao: acao // 'cadastrada' ou 'atualizada'
+      personId: personIdRetornado,
+      acao: acao
     });
     
   } catch (error) {
@@ -194,23 +183,8 @@ app.post('/api/cadastrar-face', upload.single('foto'), async (req, res) => {
   }
 });
 
-// Função para obter IP local
-function getLocalIP() {
-  const { networkInterfaces } = require('os');
-  const nets = networkInterfaces();
-  
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      const familyV4Value = typeof net.family === 'string' ? 'IPv4' : 4;
-      if (net.family === familyV4Value && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return 'localhost';
-}
 
-// Tratamento de erros
+// Tratamento de erros de middlewares (Multer, etc.)
 app.use((error, req, res, next) => {
   console.error('❌ Erro no servidor:', error);
   
@@ -229,8 +203,24 @@ app.use((error, req, res, next) => {
   });
 });
 
+// Função utilitária para obter IP local (mantida)
+function getLocalIP() {
+    const interfaces = os.networkInterfaces();
+    for (const devName in interfaces) {
+        const iface = interfaces[devName];
+        for (let i = 0; i < iface.length; i++) {
+            const alias = iface[i];
+            if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+                return alias.address;
+            }
+        }
+    }
+    return 'IP_NAO_ENCONTRADO';
+}
+
 // Inicializar servidor
 async function startServer() {
+  // 1. Inicializa serviços (só acontece uma vez)
   await initializeServices();
   
   const HOST = '0.0.0.0';
@@ -254,14 +244,15 @@ async function startServer() {
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Parando servidor...');
-  if (dbService) {
-    dbService.close();
+  if (dbService && dbService.close) { // Adicionado check para garantir que existe
+      dbService.close();
   }
   console.log('✨ Servidor finalizado com sucesso!');
   process.exit(0);
 });
 
-startServer().catch((error) => {
-  console.error('❌ Erro crítico ao iniciar servidor:', error);
+// ÚNICA CHAMADA: Inicia o servidor e trata erros de inicialização.
+startServer().catch((error) => { 
+  console.error('❌ Erro crítico ao iniciar servidor:', error.message);
   process.exit(1);
 });

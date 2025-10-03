@@ -100,6 +100,13 @@
             color: #333;
             border: 2px solid #dee2e6;
         }
+        
+        /* Estilo do botão de reset modificado para Parar Câmera */
+        .btn-reset {
+            background: #dc3545; /* Cor vermelha para indicar parada */
+            color: white;
+            margin-top: 10px;
+        }
 
         .person-info {
             background: #f8f9fa;
@@ -123,18 +130,14 @@
             color: #666;
         }
 
+        /* photo-area adaptada para ser a área de controle e visualização da câmera */
         .photo-area {
             border: 3px dashed #ddd;
             border-radius: 10px;
-            padding: 40px;
+            padding: 20px; /* Reduzido o padding */
             text-align: center;
             margin: 20px 0;
             transition: border-color 0.3s ease;
-        }
-
-        .photo-area.dragover {
-            border-color: #35f34f;
-            background: #f0f8ff;
         }
 
         .photo-preview {
@@ -222,12 +225,6 @@
             display: block;
         }
 
-        .btn-reset {
-            background: #6c757d;
-            color: white;
-            margin-top: 10px;
-        }
-
         .steps-info {
             background: #e3f2fd;
             border-radius: 10px;
@@ -249,6 +246,11 @@
             color: #333;
         }
 
+        #webcamView, #photoCanvas {
+            max-width: 100%;
+            height: auto;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 20px;
@@ -268,17 +270,15 @@
             <p>Sistema de registro por reconhecimento facial</p>
         </div>
 
-        <!-- Instruções -->
         <div class="steps-info">
             <h3><i class="fas fa-list-ol"></i> Como funciona:</h3>
             <ol>
                 <li>Digite seu CPF para buscar seus dados</li>
-                <li>Tire ou envie uma foto com seu rosto bem visível</li>
+                <li>**Tire uma foto no momento** (câmera/webcam) com seu rosto bem visível</li>
                 <li>Clique em "Cadastrar Face" para finalizar</li>
             </ol>
         </div>
 
-        <!-- Formulário de Cadastro -->
         <form id="formCadastro">
             <div class="form-group">
                 <label for="cpf">
@@ -297,23 +297,31 @@
                 <p><strong>CPF:</strong> <span id="personCPF"></span></p>
                 <p><strong>Email:</strong> <span id="personEmail"></span></p>
                 <p><strong>Telefone:</strong> <span id="personTelefone"></span></p>
-                <p><strong>Endereço:</strong> <span id="personEndereco"></span></p>
+                <p><strong>Status Facial:</strong> <span id="personEndereco"></span></p>
             </div>
 
             <div class="form-group">
                 <label>
                     <i class="fas fa-camera"></i> Foto para Reconhecimento
                 </label>
-                <div class="photo-area" id="photoArea">
-                    <i class="fas fa-cloud-upload-alt" style="font-size: 3rem; color: #ddd; margin-bottom: 20px;"></i>
-                    <p>Clique aqui ou arraste uma foto</p>
-                    <p style="font-size: 0.9rem; color: #999;">Formatos: JPEG, PNG (máx. 5MB)</p>
-                    <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">
-                        <i class="fas fa-lightbulb"></i> 
-                        Dica: Use boa iluminação e posição frontal para melhor resultado
+                
+                <div class="photo-area" id="cameraArea">
+                    <video id="webcamView" autoplay style="width: 100%; border-radius: 8px; display: none;"></video>
+                    <canvas id="photoCanvas" style="width: 100%; border-radius: 8px; display: none;"></canvas>
+
+                    <div id="controls" style="margin-top: 15px;">
+                        <button type="button" id="btnStartCamera" class="btn btn-secondary" style="width: 100%;"><i class="fas fa-video"></i> Iniciar Câmera/Webcam</button>
+                        <button type="button" id="btnCapturePhoto" class="btn" style="width: 100%; display: none; margin-top: 10px;" disabled><i class="fas fa-camera"></i> Tirar Foto</button>
+                    </div>
+
+                    <p id="cameraInstructions" style="font-size: 0.9rem; color: #666; margin-top: 15px;">
+                        <i class="fas fa-lightbulb"></i> Clique em "Iniciar Câmera" para ativar a captura ao vivo.
                     </p>
+                    <p style="font-size: 0.9rem; color: #999;">Formatos: JPEG, PNG (máx. 5MB)</p>
                 </div>
-                <input type="file" id="fotoInput" class="file-input" accept="image/*">
+
+                <input type="file" id="fotoInput" class="file-input" accept="image/*" capture="user">
+                
                 <img id="photoPreview" class="photo-preview">
             </div>
 
@@ -326,31 +334,40 @@
             </button>
         </form>
 
-        <!-- Mensagem de Sucesso -->
         <div id="successMessage" class="success-message">
             <h3><i class="fas fa-check-circle"></i> Cadastro Realizado com Sucesso!</h3>
             <p id="successText"></p>
         </div>
 
-        <!-- Loading -->
         <div id="loading" class="loading">
             <div class="spinner"></div>
             <p>Processando...</p>
         </div>
 
-        <!-- Alerts -->
         <div id="alert" class="alert"></div>
     </div>
 
     <script>
         // Variáveis globais
-        let dadosPessoa = null;
+        let dadosPessoa = null; // Armazena ID, CPF, Nome, Email, Telefone, etc.
         let fotoSelecionada = null;
+        
+        // Variáveis da Câmera
+        let videoStream = null;
+        const isMobile = /Mobi/i.test(window.navigator.userAgent);
+        const videoElement = document.getElementById('webcamView');
+        const canvasElement = document.getElementById('photoCanvas');
+        const fotoInput = document.getElementById('fotoInput');
+        const btnStart = document.getElementById('btnStartCamera');
+        const btnCapture = document.getElementById('btnCapturePhoto');
+        const cameraInstructions = document.getElementById('cameraInstructions');
+        const photoPreview = document.getElementById('photoPreview'); 
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             setupEventListeners();
             formatCPFInput();
+            checkDeviceType(); // Verifica o dispositivo e configura o fluxo da câmera
         });
 
         // Setup de event listeners
@@ -359,14 +376,159 @@
             document.getElementById('cpf').addEventListener('input', handleCPFInput);
             document.getElementById('btnBuscarCPF').addEventListener('click', buscarCPF);
 
-            // Photo area
-            setupPhotoArea();
+            // NOVO: Event listeners para o fluxo da webcam (Desktop)
+            btnStart.addEventListener('click', startCamera);
+            btnCapture.addEventListener('click', capturePhoto);
 
             // Form
             document.getElementById('formCadastro').addEventListener('submit', handleCadastro);
             
             // Reset button
             document.getElementById('btnReset').addEventListener('click', resetForm);
+        }
+
+        // NOVO: Verifica o dispositivo e configura a área de foto
+        function checkDeviceType() {
+             if (isMobile) {
+                // FLUXO MOBILE (Usa input[file] com capture="user")
+                document.getElementById('cameraArea').style.display = 'none'; // Esconde a interface de vídeo/canvas
+                
+                // Cria uma área clicável que ativa o input[file]
+                const mobilePhotoArea = document.createElement('div');
+                mobilePhotoArea.className = 'photo-area';
+                mobilePhotoArea.innerHTML = `
+                    <i class="fas fa-camera" style="font-size: 3rem; color: #ddd; margin-bottom: 20px;"></i>
+                    <p>Clique aqui para abrir a **CÂMERA**</p>
+                    <p style="font-size: 0.9rem; color: #666; margin-top: 10px;">
+                        <i class="fas fa-mobile-alt"></i> Usando a câmera frontal para captura.
+                    </p>
+                `;
+                
+                // Substitui a área desktop pela área mobile
+                document.getElementById('cameraArea').parentNode.insertBefore(mobilePhotoArea, document.getElementById('cameraArea'));
+                document.getElementById('cameraArea').remove();
+
+                mobilePhotoArea.addEventListener('click', () => fotoInput.click());
+                fotoInput.addEventListener('change', handlePhotoSelect);
+                
+                // Bloqueia Drag and Drop em Mobile
+                mobilePhotoArea.addEventListener('dragover', (e) => e.preventDefault());
+                mobilePhotoArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    showAlert('Apenas fotos tiradas na hora são permitidas. Use a câmera.', 'error');
+                });
+            } else {
+                // FLUXO DESKTOP (Usa MediaDevices API)
+                // O fotoInput (input[file]) permanece escondido e não é usado para cliques
+                // A área 'cameraArea' permanece visível com o botão 'Iniciar Câmera'.
+            }
+        }
+
+        // NOVO: Inicia a webcam (Desktop Flow)
+        async function startCamera() {
+            if (videoStream) {
+                stopCamera();
+                return;
+            }
+            
+            // Limpa pré-visualizações
+            canvasElement.style.display = 'none';
+            
+            try {
+                const constraints = { video: { facingMode: 'user' } }; 
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = videoStream;
+                
+                videoElement.style.display = 'block';
+                
+                // Configura botões e instruções
+                btnStart.textContent = 'Parar Câmera';
+                btnStart.classList.remove('btn-secondary');
+                btnStart.classList.add('btn-reset');
+                btnCapture.style.display = 'block';
+                btnCapture.disabled = false;
+                cameraInstructions.textContent = 'Posicione o rosto e clique em "Tirar Foto"';
+
+            } catch (error) {
+                console.error('Erro ao acessar a câmera:', error);
+                showAlert('Permissão de câmera negada ou webcam não encontrada. Tente no celular.', 'error');
+                btnStart.textContent = 'Iniciar Câmera/Webcam';
+                btnStart.classList.remove('btn-reset');
+                btnStart.classList.add('btn-secondary');
+            }
+        }
+
+        // NOVO: Para a webcam
+        function stopCamera() {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoElement.style.display = 'none';
+                videoElement.srcObject = null;
+                videoStream = null;
+
+                btnStart.textContent = 'Iniciar Câmera/Webcam';
+                btnStart.classList.remove('btn-reset');
+                btnStart.classList.add('btn-secondary');
+                btnCapture.style.display = 'none';
+                cameraInstructions.textContent = 'Clique em "Iniciar Câmera" para ativar a captura ao vivo.';
+            }
+        }
+
+        // NOVO: Captura a foto e transforma em arquivo (Desktop Flow)
+        function capturePhoto() {
+            if (!videoStream) return;
+
+            const width = videoElement.videoWidth;
+            const height = videoElement.videoHeight;
+            canvasElement.width = width;
+            canvasElement.height = height;
+
+            // Desenha o frame no canvas
+            const context = canvasElement.getContext('2d');
+            context.drawImage(videoElement, 0, 0, width, height);
+
+            // Converte o canvas para Blob (Formato JPEG)
+            canvasElement.toBlob((blob) => {
+                // Cria um objeto File simulado para o fluxo do formulário
+                const capturedFile = new File([blob], 'captured_face.jpeg', {
+                    type: 'image/jpeg',
+                    lastModified: Date.now()
+                });
+                
+                // Define o arquivo capturado e atualiza o botão
+                fotoSelecionada = capturedFile;
+                updateCadastroButton();
+                showAlert('Foto capturada com sucesso!', 'success');
+                
+                // Exibe a foto capturada (canvas) e para o vídeo
+                videoElement.style.display = 'none';
+                canvasElement.style.display = 'block';
+                stopCamera(); // Desliga a webcam
+
+            }, 'image/jpeg');
+        }
+
+
+        // Handle photo selection (EXCLUSIVO PARA FLUXO MOBILE)
+        function handlePhotoSelect() {
+            if (fotoInput.files && fotoInput.files[0]) {
+                const file = fotoInput.files[0];
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    showAlert('Arquivo muito grande. Máximo 5MB.', 'error');
+                    return;
+                }
+
+                // Em mobile, exibe a foto capturada (do input[file]) no preview
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    photoPreview.src = e.target.result;
+                    photoPreview.classList.add('show');
+                    fotoSelecionada = file;
+                    updateCadastroButton();
+                };
+                reader.readAsDataURL(file);
+            }
         }
 
         // Formatação do CPF
@@ -392,61 +554,7 @@
             }
         }
 
-        // Setup photo area
-        function setupPhotoArea() {
-            const area = document.getElementById('photoArea');
-            const input = document.getElementById('fotoInput');
-            const preview = document.getElementById('photoPreview');
-
-            area.addEventListener('click', () => input.click());
-            input.addEventListener('change', handlePhotoSelect);
-
-            // Drag and drop
-            area.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                area.classList.add('dragover');
-            });
-
-            area.addEventListener('dragleave', () => {
-                area.classList.remove('dragover');
-            });
-
-            area.addEventListener('drop', (e) => {
-                e.preventDefault();
-                area.classList.remove('dragover');
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    input.files = files;
-                    handlePhotoSelect();
-                }
-            });
-        }
-
-        // Handle photo selection
-        function handlePhotoSelect() {
-            const input = document.getElementById('fotoInput');
-            const preview = document.getElementById('photoPreview');
-
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                
-                if (file.size > 5 * 1024 * 1024) {
-                    showAlert('Arquivo muito grande. Máximo 5MB.', 'error');
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    preview.src = e.target.result;
-                    preview.classList.add('show');
-                    fotoSelecionada = file;
-                    updateCadastroButton();
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-
-        // Buscar CPF
+        // Buscar CPF (ATUALIZADO: Armazena todos os dados)
         async function buscarCPF() {
             const cpf = document.getElementById('cpf').value;
             
@@ -469,10 +577,11 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    dadosPessoa = result.dados;
-                    showPersonInfo(result.dados);
+                    // ARMAZENA TODOS OS DADOS COMPLETOS DO ALUNO NA VARIÁVEL GLOBAL
+                    dadosPessoa = result.dadosPessoa; 
+                    showPersonInfo(result.dadosPessoa);
                     updateCadastroButton();
-                    showAlert('Dados encontrados com sucesso!', 'success');
+                    showAlert(result.message, 'success');
                 } else {
                     hidePersonInfo();
                     showAlert(result.message, 'error');
@@ -486,13 +595,21 @@
             }
         }
 
-        // Show person info
+        // Show person info (ATUALIZADO: para novos campos)
         function showPersonInfo(dados) {
             document.getElementById('personNome').textContent = dados.nome;
             document.getElementById('personCPF').textContent = dados.cpf;
-            document.getElementById('personEmail').textContent = dados.email;
-            document.getElementById('personTelefone').textContent = dados.telefone;
-            document.getElementById('personEndereco').textContent = dados.endereco;
+            document.getElementById('personEmail').textContent = dados.email || 'N/A';
+            document.getElementById('personTelefone').textContent = dados.telefone || 'N/A';
+            
+            // Usando 'personEndereco' para o status facial
+            const status = dados.facial_status || 'NÃO CADASTRADA';
+            document.getElementById('personEndereco').textContent = status;
+
+            if (status === 'CADASTRADA') {
+                showAlert('✅ Rosto já cadastrado! O próximo envio irá ATUALIZAR o cadastro.', 'info');
+            }
+            
             document.getElementById('personInfo').classList.add('show');
         }
 
@@ -509,7 +626,7 @@
             btnCadastrar.disabled = !(dadosPessoa && fotoSelecionada);
         }
 
-        // Handle cadastro
+        // Handle cadastro (ATUALIZADO: Envia todos os dados)
         async function handleCadastro(e) {
             e.preventDefault();
 
@@ -521,8 +638,12 @@
             showLoading(true);
             
             const formData = new FormData();
+            // ENVIANDO TODOS OS DADOS DO ALUNO, ALÉM DA FOTO
+            formData.append('id', dadosPessoa.id); 
             formData.append('cpf', dadosPessoa.cpf);
             formData.append('nome', dadosPessoa.nome);
+            formData.append('email', dadosPessoa.email); 
+            formData.append('telefone', dadosPessoa.telefone); 
             formData.append('foto', fotoSelecionada);
 
             try {
@@ -567,10 +688,13 @@
 
         // Reset form
         function resetForm() {
+            stopCamera(); 
+            
             // Reset form fields
             document.getElementById('cpf').value = '';
             document.getElementById('fotoInput').value = '';
-            document.getElementById('photoPreview').classList.remove('show');
+            photoPreview.classList.remove('show');
+            canvasElement.style.display = 'none'; 
             
             // Reset variables
             dadosPessoa = null;

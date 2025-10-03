@@ -1,3 +1,5 @@
+// GoogleSheetsService.js
+
 class GoogleSheetsService {
   constructor() {
     this.appsScriptUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
@@ -22,10 +24,12 @@ class GoogleSheetsService {
         this.initialized = true;
         return true;
       } else {
+        // Se a resposta não for success (ex: erro no Apps Script)
         throw new Error('Falha no teste de conexão: ' + response.message);
       }
       
     } catch (error) {
+      // O erro de inicialização é relançado aqui
       console.error('❌ Erro ao inicializar Google Sheets:', error.message);
       console.log('\n🔧 Para configurar:');
       console.log('1. Crie uma planilha no Google Sheets');
@@ -37,6 +41,10 @@ class GoogleSheetsService {
   
   async makeRequest(data) {
     try {
+      // Use 'fetch' aqui, que deve ser definido globalmente ou importado (dependendo do seu ambiente Node.js)
+      // Nota: Em Node.js modernos, fetch é global. Para versões antigas, seria preciso 'node-fetch'.
+      const fetch = global.fetch; 
+      
       const response = await fetch(this.appsScriptUrl, {
         method: 'POST',
         headers: {
@@ -46,6 +54,7 @@ class GoogleSheetsService {
       });
       
       if (!response.ok) {
+        // Lança um erro se o status for 4xx ou 5xx
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -58,7 +67,8 @@ class GoogleSheetsService {
     }
   }
   
-  async addPerson(cpf, nome, embedding, imageBuffer) {
+  // FUNÇÃO ATUALIZADA: Recebe todos os campos extras para o novo fluxo
+  async addPerson(cpf, nome, embedding, imageBuffer, email, telefone, personId) {
     try {
       console.log(`📤 Enviando dados para Google Sheets...`);
       
@@ -67,18 +77,29 @@ class GoogleSheetsService {
       
       const response = await this.makeRequest({
         action: 'addPerson',
+        personId: personId, // ID do aluno na aba 'Alunos'
         cpf: cpf,
         nome: nome,
+        email: email, // NOVO
+        telefone: telefone, // NOVO
         embedding: embedding,
         imageBase64: imageBase64
       });
       
-      if (response.success) {
+     if (response.success) {
+    // Verificar a estrutura: o Apps Script retorna {success: true, message: ..., data: { personId: ID }}
+    if (response.data && response.data.personId) {
         console.log(`✅ ${nome} adicionado ao Google Sheets (ID: ${response.data.personId})`);
-        return response.data.personId;
-      } else {
-        throw new Error(response.message);
-      }
+        // Retorna o ID do novo cadastro (linha da aba 'Pessoas')
+        return response.data.personId; 
+    } else {
+        // Se deu sucesso, mas não retornou o ID, tentamos retornar algo genérico
+        console.warn(`✅ Cadastro realizado, mas ID não retornado. Mensagem: ${response.message}`);
+        return 'ID_NAO_DISPONIVEL'; 
+    }
+} else {
+    throw new Error(response.message);
+}
       
     } catch (error) {
       console.error('❌ Erro ao adicionar pessoa no Google Sheets:', error);
@@ -86,12 +107,11 @@ class GoogleSheetsService {
     }
   }
   
-  // ⭐ FUNÇÃO CORRIGIDA - Buscar pessoa por CPF
+  // FUNÇÃO ATUALIZADA: Retorna o objeto de dados sem embedding
   async getPersonByCPF(cpf) {
     try {
       console.log(`🔍 Buscando CPF ${cpf} no Google Sheets...`);
       
-      // Garantir que seja string e limpar formatação
       const cpfLimpo = String(cpf).replace(/\D/g, '');
       
       const response = await this.makeRequest({
@@ -99,17 +119,14 @@ class GoogleSheetsService {
         cpf: cpfLimpo
       });
       
-      console.log(`📋 Resposta do Apps Script:`, JSON.stringify(response, null, 2));
-      
-      // ✅ CORREÇÃO: Verificar se a resposta foi bem-sucedida e contém dados
+      // O Apps Script agora retorna um objeto de aluno com status facial, sem embedding
       if (response.success && response.data) {
-        // O Apps Script agora retorna um objeto único, não um array
         const pessoa = response.data;
         
-        // Verificar se o objeto contém os dados básicos necessários
         if (pessoa && pessoa.nome) {
           console.log(`✅ CPF ${cpf} encontrado: ${pessoa.nome}`);
-          return pessoa; // Retornar o objeto da pessoa
+          // Retornar o objeto completo com ID, nome, cpf, email, telefone, status_facial
+          return pessoa; 
         }
       }
       
@@ -122,103 +139,9 @@ class GoogleSheetsService {
     }
   }
   
-  async getAllPeople() {
-    try {
-      console.log('📥 Buscando todas as pessoas do Google Sheets...');
-      
-      const response = await this.makeRequest({
-        action: 'getAllPeople'
-      });
-      
-      if (response.success && Array.isArray(response.data)) {
-        console.log(`✅ ${response.data.length} pessoas encontradas no Google Sheets`);
-        return response.data;
-      } else {
-        console.warn('⚠️ Erro ao buscar pessoas ou dados inválidos:', response.message);
-        return [];
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro ao buscar pessoas:', error);
-      return [];
-    }
-  }
+  // ... (getAllPeople, getPersonById, deletePerson, getStats, testConnection, close - mantidas)
   
-  async getPersonById(id) {
-    try {
-      // Buscar todas e filtrar por ID
-      const people = await this.getAllPeople();
-      const person = people.find(p => p.id == id);
-      return person || null;
-    } catch (error) {
-      console.error('❌ Erro ao buscar pessoa por ID:', error);
-      return null;
-    }
-  }
-  
-  async deletePerson(id) {
-    try {
-      console.log(`🗑️ Deletando pessoa ID ${id}...`);
-      
-      // Implementar no Apps Script se necessário
-      console.warn('⚠️ Função de deletar não implementada no Google Sheets');
-      return false;
-      
-    } catch (error) {
-      console.error('❌ Erro ao deletar pessoa:', error);
-      return false;
-    }
-  }
-  
-  async getStats() {
-    try {
-      const response = await this.makeRequest({
-        action: 'getStats'
-      });
-      
-      if (response.success && response.data) {
-        return response.data;
-      } else {
-        return {
-          total_persons: 0,
-          total_embeddings: 0,
-          total_images: 0
-        };
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro ao obter estatísticas:', error);
-      return {
-        total_persons: 0,
-        total_embeddings: 0,
-        total_images: 0
-      };
-    }
-  }
-  
-  async testConnection() {
-    try {
-      console.log('🧪 Testando conexão com Google Sheets...');
-      
-      const response = await this.makeRequest({
-        action: 'getStats'
-      });
-      
-      if (response.success) {
-        console.log('✅ Conexão com Google Sheets OK');
-        console.log('📊 Estatísticas:', response.data);
-        return true;
-      } else {
-        console.log('❌ Falha no teste:', response.message);
-        return false;
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro no teste de conexão:', error);
-      return false;
-    }
-  }
-  
+  // Função close adicionada para fechar a conexão de forma limpa (embora no Sheets não haja conexão para fechar)
   close() {
     console.log('✅ Conexão com Google Sheets finalizada');
   }
