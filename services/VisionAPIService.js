@@ -2,57 +2,45 @@
 
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 
-// Tenta ler o ID do projeto do .env ou de outras variáveis padrão
+// Opcional: tenta ler o Project ID (funciona fora do GCP)
+// Dentro do Cloud Run/VM não precisa, o SDK descobre sozinho
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GCLOUD_PROJECT;
 
 class VisionAPIService {
   constructor() {
-    // O Cliente AGORA usa o ID do seu projeto para cotas
-    this.client = new ImageAnnotatorClient({
-        // O cliente usará GOOGLE_APPLICATION_CREDENTIALS para a chave,
-        // e este projectId para definir o projeto de cotas.
-        projectId: PROJECT_ID, 
-    });
-    
+    // Se PROJECT_ID existir, passa; senão deixa o SDK resolver sozinho
+    this.client = new ImageAnnotatorClient(
+      PROJECT_ID ? { projectId: PROJECT_ID } : {}
+    );
+
     if (!PROJECT_ID) {
-        console.warn('⚠️ GCLOUD_PROJECT ID não definido. A Cloud Vision API pode falhar.');
+      console.warn('⚠️ GCLOUD_PROJECT ID não definido. Dentro do GCP isso é normal.');
     }
   }
   
   async detectFace(imageBuffer) {
-    // ... (restante do código: console.log, imageBase64, request)
     console.log('🤖 Chamando Google Cloud Vision API para detecção de face...');
     
-    // Converte o buffer da imagem para Base64, que a API da Vision aceita
+    // Converte imagem para Base64
     const imageBase64 = imageBuffer.toString('base64');
 
     const request = {
-      image: {
-        content: imageBase64,
-      },
-      features: [
-        {
-          type: 'FACE_DETECTION',
-        },
-      ],
+      image: { content: imageBase64 },
+      features: [{ type: 'FACE_DETECTION' }],
     };
 
     try {
       const [result] = await this.client.annotateImage(request);
-      
       const faces = result.faceAnnotations;
-      
+
       if (!faces || faces.length === 0) {
         console.log('❌ Nenhuma face detectada pela Vision API.');
         return null;
       }
-      
-      // Retorna a primeira face detectada
+
       const face = faces[0];
-      
-      // Converte o Poly-box retornado pela API em um formato simples (Bounding Box)
       const boundingPoly = face.boundingPoly.vertices;
-      
+
       const boundingBox = {
         x: boundingPoly[0].x,
         y: boundingPoly[0].y,
@@ -60,11 +48,10 @@ class VisionAPIService {
         height: boundingPoly[2].y - boundingPoly[0].y,
       };
 
-      console.log('✅ Face detectada pela Vision API. Bounding Box:', boundingBox);
+      console.log('✅ Face detectada. Bounding Box:', boundingBox);
       return boundingBox;
-      
     } catch (error) {
-      console.error('Erro na chamada à Vision API:', error);
+      console.error('Erro na Vision API:', error.message || error);
       throw new Error('Falha na detecção facial externa.');
     }
   }
