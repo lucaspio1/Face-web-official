@@ -2,9 +2,9 @@
 
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 
-// Opcional: tenta ler o Project ID (funciona fora do GCP)
-// Dentro do Cloud Run/VM não precisa, o SDK descobre sozinho
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GCLOUD_PROJECT;
+// Opcional: tenta ler o Project ID em dev local
+// Dentro do Cloud Run/VM/GKE não precisa, o SDK descobre sozinho
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
 
 class VisionAPIService {
   constructor() {
@@ -14,7 +14,7 @@ class VisionAPIService {
     );
 
     if (!PROJECT_ID) {
-      console.warn('⚠️ GCLOUD_PROJECT ID não definido. Dentro do GCP isso é normal.');
+      console.warn('⚠️ GCLOUD_PROJECT não definido. No Cloud Run isso é normal.');
     }
   }
   
