@@ -9,7 +9,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const os = require('os'); // Adicionado para getLocalIP
 
-const FaceRecognitionService = require('./services/FaceRecognitionService');
+const ArcFaceService = require('./services/ArcFaceService');
 const GoogleSheetsService = require('./services/GoogleSheetsService');
 const VisionAPIService = require('./services/VisionAPIService');
 
@@ -58,7 +58,7 @@ async function initializeServices() {
     console.log('✅ Serviço Cloud Vision inicializado (Autenticação gcloud OK)');
     
     // Serviço de Reconhecimento Facial (Customizado)
-    faceService = new FaceRecognitionService();
+   faceService = new ArcFaceService();;
     await faceService.initialize();
     console.log('✅ Serviço de reconhecimento facial inicializado');
     

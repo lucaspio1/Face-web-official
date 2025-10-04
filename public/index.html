@@ -596,6 +596,8 @@
         }
 
         // Show person info (ATUALIZADO: para novos campos)
+              // Show person info (ATUALIZADO: para novos campos)
+              // Show person info (ATUALIZADO: para novos campos)
         function showPersonInfo(dados) {
             document.getElementById('personNome').textContent = dados.nome;
             document.getElementById('personCPF').textContent = dados.cpf;
@@ -607,12 +609,30 @@
             document.getElementById('personEndereco').textContent = status;
 
             if (status === 'CADASTRADA') {
-                showAlert('✅ Rosto já cadastrado! O próximo envio irá ATUALIZAR o cadastro.', 'info');
+                // Exibe mensagem de facial já cadastrada
+                document.getElementById('successText').textContent = 'Facial já cadastrada para este CPF!';
+                document.getElementById('successMessage').classList.add('show');
+                
+                // Desabilita área de captura de foto
+                document.getElementById('cameraArea').style.opacity = '0.5';
+                document.getElementById('cameraArea').style.pointerEvents = 'none';
+                btnStart.disabled = true;
+                btnCapture.disabled = true;
+                
+                // Desabilita botão de cadastro
+                document.getElementById('btnCadastrar').disabled = true;
+                
+                showAlert('Este CPF já possui facial cadastrada. Não é possível enviar nova foto.', 'info');
+            } else {
+                // Garante que a mensagem está oculta e área habilitada se não houver cadastro
+                hideSuccess();
+                document.getElementById('cameraArea').style.opacity = '1';
+                document.getElementById('cameraArea').style.pointerEvents = 'auto';
+                btnStart.disabled = false;
             }
             
             document.getElementById('personInfo').classList.add('show');
         }
-
         // Hide person info
         function hidePersonInfo() {
             document.getElementById('personInfo').classList.remove('show');

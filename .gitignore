@@ -43,3 +43,13 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 gcp-key.json
+# .gitignore
+venv/
+venv_arcface/
+__pycache__/
+*.pyc
+.env
+node_modules/
+arcface_embeddings.db
+model_keras.h5
+*.bin
